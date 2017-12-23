@@ -16,6 +16,7 @@ REQUIREMENTS = ['xmltodict==0.11.0']
 _LOGGER = logging.getLogger(__name__)
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_HOST): cv.string,
+    vol.Required("version"): cv.positive_int,
 })
 
 

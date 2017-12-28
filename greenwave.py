@@ -2,50 +2,65 @@
 Support for Greenwave Reality (TCP Connected) lights.
 
 For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/light.tcpbulbs/
+https://home-assistant.io/components/light.greenwave/
 """
 import logging
+
 import voluptuous as vol
+
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS, Light, PLATFORM_SCHEMA, SUPPORT_BRIGHTNESS)
 from homeassistant.const import CONF_HOST
 import homeassistant.helpers.config_validation as cv
 
-SUPPORTED_FEATURES = (SUPPORT_BRIGHTNESS)
-REQUIREMENTS = ['greenwavereality']
+SUPPORTED_FEATURES = SUPPORT_BRIGHTNESS
+
+REQUIREMENTS = ['greenwavereality==0.4']
 _LOGGER = logging.getLogger(__name__)
+
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_HOST): cv.string,
+    vol.Required("version"): cv.positive_int,
 })
 
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
-    """Setup TCP Connected Platform."""
+    """Setup Greenwave Reality Platform."""
     import greenwavereality as greenwave
     import os
+    import collections
     host = config.get(CONF_HOST)
-    tokenfile = hass.config.path('greenwave.token')
+    tokenfile = hass.config.path('.greenwave')
     if config.get("version") == 3:
         if os.path.exists(tokenfile):
             tokenfile = open(tokenfile)
             token = tokenfile.read()
             tokenfile.close()
         else:
-            token = greenwave.grab_token(host, 'hass', 'homeassistant')
+            try:
+                token = greenwave.grab_token(host, 'hass', 'homeassistant')
+            except PermissionError:
+                _LOGGER.error('The Gateway Is Not In Sync Mode')
+                raise
             tokenfile = open(tokenfile, "w+")
             tokenfile.write(token)
             tokenfile.close()
     else:
         token = None
     doc = greenwave.grab_xml(host, token)
-    add_devices(TcpLights(device, host, token) for device in doc)
+    for room in doc:
+        if type(room['device']) == list:
+            for device in room['device']:
+                add_devices(TcpLights(device, host, token))
+        if type(room['device']) == collections.OrderedDict:
+            add_devices(TcpLights(room['device'], host, token))
 
 
-class TcpLights(Light):
-    """Representation of an TCP Connected Light."""
+class GreenwaveLight(Light):
+    """Representation of an Greenwave Reality Light."""
 
     def __init__(self, light, host, token):
-        """Initialize a TCP Connected Light."""
+        """Initialize a Greenwave Reality Light."""
         import greenwavereality as greenwave
         self._did = light['did']
         self._name = light['name']
@@ -83,8 +98,10 @@ class TcpLights(Light):
     def turn_on(self, **kwargs):
         """Instruct the light to turn on."""
         import greenwavereality as greenwave
-        temp_brightness = int((kwargs.get(ATTR_BRIGHTNESS, 255) / 255) * 100)
-        greenwave.set_brightness(self._host, self._did, temp_brightness, self.token)
+        temp_brightness = int((kwargs.get(ATTR_BRIGHTNESS, 255)
+                               / 255) * 100)
+        greenwave.set_brightness(self._host, self._did,
+                                 temp_brightness, self.token)
         greenwave.turn_on(self._host, self._did, self.token)
 
     def turn_off(self, **kwargs):

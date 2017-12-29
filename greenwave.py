@@ -107,7 +107,6 @@ class GreenwaveLight(Light):
     def update(self):
         """Fetch new state data for this light."""
         import greenwavereality as greenwave
-        import collections
         doc = greenwave.grab_xml(self._host, self.token)
 
         for room in doc:

@@ -15,7 +15,7 @@ import homeassistant.helpers.config_validation as cv
 
 SUPPORTED_FEATURES = SUPPORT_BRIGHTNESS
 
-REQUIREMENTS = ['greenwavereality==0.4']
+REQUIREMENTS = ['greenwavereality==0.4.1']
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
@@ -28,7 +28,6 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     """Setup Greenwave Reality Platform."""
     import greenwavereality as greenwave
     import os
-    import collections
     host = config.get(CONF_HOST)
     tokenfile = hass.config.path('.greenwave')
     if config.get("version") == 3:
@@ -49,11 +48,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         token = None
     doc = greenwave.grab_xml(host, token)
     for room in doc:
-        if type(room['device']) == list:
-            for device in room['device']:
-                add_devices(TcpLights(device, host, token))
-        if type(room['device']) == collections.OrderedDict:
-            add_devices(TcpLights(room['device'], host, token))
+        add_devices(GreenwaveLight(device, host, token) for device in room['device'])
 
 
 class GreenwaveLight(Light):
@@ -112,11 +107,13 @@ class GreenwaveLight(Light):
     def update(self):
         """Fetch new state data for this light."""
         import greenwavereality as greenwave
+        import collections
         doc = greenwave.grab_xml(self._host, self.token)
 
-        for device in doc:
-            if device['did'] == self._did:
-                self._state = int(device['state'])
-                self._brightness = greenwave.hass_brightness(device)
-                self._online = greenwave.check_online(device)
-                self._name = device['name']
+        for room in doc:
+            for device in room['device']:
+                if device['did'] == self._did:
+                    self._state = int(device['state'])
+                    self._brightness = greenwave.hass_brightness(device)
+                    self._online = greenwave.check_online(device)
+                    self._name = device['name']
